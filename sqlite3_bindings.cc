@@ -366,14 +366,8 @@ protected:
       }
     }
 
-    TryCatch try_catch;
-
     prep_req->dbo->Unref();
     prep_req->cb->Call(Context::GetCurrent()->Global(), argc, argv);
-
-    if (try_catch.HasCaught()) {
-      FatalException(try_catch);
-    }
 
     prep_req->cb.Dispose();
     free(prep_req);
