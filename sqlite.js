@@ -104,7 +104,7 @@ Database.prototype.query = function(sql, bindings, rowCallback) {
 
   this.prepare(sql, function(error, statement) {
     if (error) {
-		rowCallback(err);
+		rowCallback(error);
 		return;
 	} 
     if (statement) {
