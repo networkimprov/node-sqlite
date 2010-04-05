@@ -67,7 +67,10 @@ function _queryDone(db, statement) {
 
 function _doStep(db, statement, rowCallback) {
   statement.step(function (error, row) {
-    if (error) throw error;
+    if (error) {
+      rowCallback(error);
+      return;
+    }
     if (!row) {
 //       rows.rowsAffected = this.changes();
 //       rows.insertId = this.lastInsertRowid();
@@ -75,7 +78,7 @@ function _doStep(db, statement, rowCallback) {
       _queryDone(db, statement);
       return;
     }
-    rowCallback(row);
+    rowCallback(null, row);
     _doStep(db, statement, rowCallback);
   });
 }
@@ -94,23 +97,25 @@ function _onPrepare(db, statement, bindings, rowCallback) {
   }
 }
 
-Database.prototype.query = function(sql, bindings, rowCallback) {
+Database.prototype.query = function(sql, bindings, callback) {
   var self = this;
 
   if (typeof(bindings) == "function") {
-    rowCallback = bindings;
+    callback = bindings;
     bindings = [];
   }
 
   this.prepare(sql, function(error, statement) {
-    if (error) {
-		rowCallback(error);
-		return;
-	} 
+    if (error) return callback(error);
     if (statement) {
-      _onPrepare(self, statement, bindings, rowCallback)
+      var results = []
+      _onPrepare(self, statement, bindings, function(error, row){
+        if (error) return callback(error);
+        if (!row) return callback(null, results);
+        results.push(row);
+      });
     } else {
-      rowCallback();
+      callback();
       self.currentQuery = undefined;
     }
   });
