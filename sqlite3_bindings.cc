@@ -388,22 +388,6 @@ protected:
     req->result = rc;
     req->int1 = -1;
 
-    // This might be a INSERT statement. Let's try to get the first row.
-    // This is to optimize out further calls to the thread pool. This is only
-    // possible in the case where there are no variable placeholders/bindings
-    // in the SQL.
-    if (rc == SQLITE_OK && !sqlite3_bind_parameter_count(prep_req->stmt)) {
-      rc = sqlite3_step(prep_req->stmt);
-      req->int1 = rc;
-
-      // no more rows to return, clean up statement
-      if (rc == SQLITE_DONE) {
-        rc = sqlite3_finalize(prep_req->stmt);
-        prep_req->stmt = NULL;
-        assert(rc == SQLITE_OK);
-      }
-    }
-
     return 0;
   }
 
@@ -454,7 +438,7 @@ protected:
 //       NODE_SET_PROTOTYPE_METHOD(t, "clearBindings", ClearBindings);
       NODE_SET_PROTOTYPE_METHOD(t, "finalize", Finalize);
 //       NODE_SET_PROTOTYPE_METHOD(t, "bindParameterCount", BindParameterCount);
-//       NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
+      NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
       NODE_SET_PROTOTYPE_METHOD(t, "step", Step);
 
       callback_sym = Persistent<String>::New(String::New("callback"));
@@ -746,12 +730,12 @@ protected:
       return Undefined();
     }
 
-//     static Handle<Value> Reset(const Arguments& args) {
-//       HandleScope scope;
-//       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
-//       SCHECK(sqlite3_reset(sto->stmt_));
-//       return Undefined();
-//     }
+    static Handle<Value> Reset(const Arguments& args) {
+       HandleScope scope;
+       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
+       sqlite3_reset(sto->stmt_);
+       return Undefined();
+     }
 
     static int EIO_AfterStep(eio_req *req) {
       ev_unref(EV_DEFAULT_UC);
@@ -778,7 +762,7 @@ protected:
 
         for (int i = 0; i < sto->column_count_; i++) {
           assert(sto->column_data_);
-          assert(((void**)sto->column_data_)[i]);
+          //assert(((void**)sto->column_data_)[i]);
           assert(sto->column_names_[i]);
           assert(sto->column_types_[i]);
 
@@ -927,12 +911,15 @@ protected:
                 sto->column_data_[i] = (char *) sqlite3_column_text(stmt, i);
               }
               break;
-
+              
+            case SQLITE_NULL:
+            
             default: {
-              assert(0 && "unsupported type");
+              //sto->column_data_[i] = Undefined();
+              break;
             }
           }
-          assert(sto->column_data_[i]);
+          //assert(sto->column_data_[i]);
           assert(sto->column_names_[i]);
           assert(sto->column_types_[i]);
         }

@@ -58,11 +58,12 @@ function _queryDone(db, statement) {
     return;
   }
 
-  statement.finalize(function () {
+/*  statement.finalize(function () {
     db.currentQuery = undefined;
     // if there are any queries queued, let them know it's safe to go
     db.emit("ready");
   });
+*/
 }
 
 function _doStep(db, statement, rowCallback) {
@@ -97,26 +98,43 @@ function _onPrepare(db, statement, bindings, rowCallback) {
   }
 }
 
-Database.prototype.query = function(sql, bindings, callback) {
-  var self = this;
+function _onQuery(db, statement, bindings, callback) {
+  self = this;
+  if (statement) {
+    statement.reset();
+    var results = []
+    
+    // this will be called after the update or once for every row returned
+    _onPrepare(self, statement, bindings, function(error, row){
+      if (error) return callback(error);
+      if (!row) return callback(null, results);
+      results.push(row);
+    });
+  } else {
+    callback();
+    self.currentQuery = undefined;
+  }  
+}
 
+Database.prototype.query = function(sql, bindings, callback) {
+  var self = this, statement;
+  //sys.puts(sql);
   if (typeof(bindings) == "function") {
     callback = bindings;
     bindings = [];
   }
+  
+  if (!self.statement_cache) self.statement_cache = [];
+  if (self.statement_cache[sql]) {
+    statement = self.statement_cache[sql];
+  }
+  
+  if (!statement) {
+    this.prepare(sql, function(error, new_statement) {
+      if (error) return callback(error);
+      _onQuery(this, new_statement, bindings, callback);
+      self.statement_cache[sql] = new_statement;
+    }); 
+  } else _onQuery(this, statement, bindings, callback);
 
-  this.prepare(sql, function(error, statement) {
-    if (error) return callback(error);
-    if (statement) {
-      var results = []
-      _onPrepare(self, statement, bindings, function(error, row){
-        if (error) return callback(error);
-        if (!row) return callback(null, results);
-        results.push(row);
-      });
-    } else {
-      callback();
-      self.currentQuery = undefined;
-    }
-  });
 }
