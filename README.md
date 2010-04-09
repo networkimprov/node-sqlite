@@ -1,10 +1,20 @@
 NAME
 ----
+This is a fork of
 
 node-sqlite - Asynchronous SQLite3 driver for Node.js
 
 SYNOPSIS
 --------
+
+The big changes in this fork of the excellent node-sqlite are:
+
+* More in the flavor of node.js and SQLite - throw exceptions as little as possible since node is async and SQLite is very flexible and fault tolerant.
+* Rename query method to execute.  Execute applies to all sql unlike query.
+* Support for passing in a sql string or a statement to execute.  See `tests\speedtest.js` for an example.  You can obtain a statement by calling
+
+    db.prepare(sql, function(err, statement))
+
 
 High-level Driver
 =================
@@ -30,7 +40,7 @@ additional steps.
 
       var ponies = [];
       
-      db.query(sql, [colour], function (pony) {
+      db.execute(sql, [colour], function (pony) {
         if (!pony) {
           // no more ponies
           if (!ponies.length)

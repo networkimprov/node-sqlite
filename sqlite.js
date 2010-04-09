@@ -20,10 +20,8 @@ var sqlite = require("./sqlite3_bindings");
 
 var Database = exports.Database = function () {
   var self = this;
-
   var db = new sqlite.Database();
   db.__proto__ = Database.prototype;
-
   return db;
 };
 
@@ -50,34 +48,22 @@ function _setBindingsByIndex(db,
   });
 }
 
-function _queryDone(db, statement) {
-  if (statement.tail) {
-    statement.finalize(function () {
-      db.prepare(statement.tail, onPrepare);
-    });
-    return;
-  }
-
-/*  statement.finalize(function () {
-    db.currentQuery = undefined;
-    // if there are any queries queued, let them know it's safe to go
-    db.emit("ready");
-  });
-*/
-}
-
+// Wrapper around sqlite step method
+// Calls rowCallback(err, row) for each row
+// When there are no more rows emits executeComplete on db
 function _doStep(db, statement, rowCallback) {
   statement.step(function (error, row) {
-    if (error) {
-      rowCallback(error);
-      return;
-    }
+    if (error) return rowCallback(error);
     if (!row) {
-//       rows.rowsAffected = this.changes();
-//       rows.insertId = this.lastInsertRowid();
-      rowCallback();
-      _queryDone(db, statement);
-      return;
+      if (db.statement === statement) {
+        return db.statement.finalize(function() {
+          db.emit("executeComplete");
+          rowCallback();
+        });
+      } else  {
+        db.emit("executeComplete");
+        return rowCallback();
+      }
     }
     rowCallback(null, row);
     _doStep(db, statement, rowCallback);
@@ -98,43 +84,50 @@ function _onPrepare(db, statement, bindings, rowCallback) {
   }
 }
 
-function _onQuery(db, statement, bindings, callback) {
-  self = this;
+function _onExecute(db, statement, bindings, callback) {
   if (statement) {
-    statement.reset();
+    if (statement.reused) statement.reset();
     var results = []
+    if (!bindings) bindings = [];
     
     // this will be called after the update or once for every row returned
-    _onPrepare(self, statement, bindings, function(error, row){
+    _onPrepare(db, statement, bindings, function(error, row){
       if (error) return callback(error);
       if (!row) return callback(null, results);
       results.push(row);
     });
-  } else {
-    callback();
-    self.currentQuery = undefined;
-  }  
+  } else callback();  
 }
 
-Database.prototype.query = function(sql, bindings, callback) {
-  var self = this, statement;
-  //sys.puts(sql);
+
+// Executes a select, insert, or update statement.
+// Params: 
+// sqlOrStatement - a sql string with optional ? for place holders or 
+//                    or a statement object retrieved from db.prepare
+//
+// bindings - optional, an array of objects to bind to ?s
+// callback - will be called as callback(err, results_array)
+//            both can be empty.  Results, even a single row, are returned
+//            as an  array
+Database.prototype.execute = function(sqlOrStatement, bindings, callback) {
+  var self = this;
+  // bindings are optional, see if they were passed
   if (typeof(bindings) == "function") {
     callback = bindings;
     bindings = [];
   }
   
-  if (!self.statement_cache) self.statement_cache = [];
-  if (self.statement_cache[sql]) {
-    statement = self.statement_cache[sql];
-  }
-  
-  if (!statement) {
-    this.prepare(sql, function(error, new_statement) {
+  if (!sqlOrStatement.step) {
+    // statements have step functions, it's a sql string
+    this.prepare(sqlOrStatement, function(error, statement) {
       if (error) return callback(error);
-      _onQuery(this, new_statement, bindings, callback);
-      self.statement_cache[sql] = new_statement;
+      self.statement = statement;
+      _onExecute(self, self.statement, bindings, callback);
     }); 
-  } else _onQuery(this, statement, bindings, callback);
-
+  } else {
+    //the user is passing in their own statement
+    sqlOrStatement.reused = true;
+    _onExecute(self, sqlOrStatement, bindings, callback);
+  } 
+    
 }
