@@ -36,7 +36,9 @@ function getRows() {
 function createTable(db, callback) {
   db.prepare("CREATE TABLE t1 (alpha INTEGER)", function (error, statement) {
     if (error) throw error;
-    callback(); 
+    statement.step(function() {
+      callback(); 
+    });
   });
 }
 

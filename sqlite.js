@@ -92,11 +92,11 @@ function _onExecute(db, statement, bindings, callback) {
     
     // this will be called after the update or once for every row returned
     _onPrepare(db, statement, bindings, function(error, row){
-      if (error) return callback(error);
-      if (!row) return callback(null, results);
+      if (error && callback) return callback(error);
+      if (!row && callback) return callback(null, results);
       results.push(row);
     });
-  } else callback();  
+  } else if (callback) callback();  
 }
 
 

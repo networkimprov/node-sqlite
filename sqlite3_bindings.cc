@@ -785,6 +785,8 @@ protected:
               // don't free this pointer, it's owned by sqlite3
               break;
 
+            case SQLITE_NULL:
+              row->Set(String::New(sto->column_names_[i]), Undefined());
             // no default
           }
         }
@@ -913,7 +915,7 @@ protected:
               break;
               
             case SQLITE_NULL:
-            
+              
             default: {
               //sto->column_data_[i] = Undefined();
               break;
