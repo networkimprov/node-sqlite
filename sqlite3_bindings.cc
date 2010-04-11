@@ -603,7 +603,7 @@ protected:
 
         for (int i = 0; i < sto->column_count_; i++) {
           assert(sto->column_data_);
-          //assert(((void**)sto->column_data_)[i]);
+          assert(((void**)sto->column_data_)[i]);
           assert(sto->column_names_[i]);
           assert(sto->column_types_[i]);
 
@@ -620,8 +620,9 @@ protected:
               break;
 
             case SQLITE_TEXT:
-              assert(strlen((char*)sto->column_data_[i]));
-              row->Set(String::New(sto->column_names_[i]),
+              if (!strlen((char*)sto->column_data_[i]))
+                row->Set(String::New(sto->column_names_[i]), Undefined());
+              else row->Set(String::New(sto->column_names_[i]),
                        String::New((char *) (sto->column_data_[i])));
               // don't free this pointer, it's owned by sqlite3
               break;
@@ -743,6 +744,7 @@ protected:
 
             case SQLITE_FLOAT:
               *(double*)(sto->column_data_[i]) = sqlite3_column_double(stmt, i);
+              assert(sto->column_data_[i]);
               break;
 
             case SQLITE_TEXT: {
@@ -752,17 +754,24 @@ protected:
                 // I'm going to assume it's okay to keep this pointer around
                 // until it is used in `EIO_AfterStep`
                 sto->column_data_[i] = (char *) sqlite3_column_text(stmt, i);
+                if (!sto->column_data_[i])
+                  sto->column_data_[i] = (char *)"";
+                assert(sto->column_data_[i]);
+                break;
               }
-              break;
               
             case SQLITE_NULL:
+              sto->column_data_[i] = (char *)"";
+              assert(sto->column_data_[i]);
+              break;
               
             default: {
-              //sto->column_data_[i] = Undefined();
+              sto->column_data_[i] = (char *)"";
+              assert(sto->column_data_[i]);
               break;
             }
           }
-          //assert(sto->column_data_[i]);
+          assert(sto->column_data_[i]);
           assert(sto->column_names_[i]);
           assert(sto->column_types_[i]);
         }
