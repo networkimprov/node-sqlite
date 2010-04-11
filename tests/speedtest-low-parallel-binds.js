@@ -49,16 +49,14 @@ function onPrepare(error, statement) {
    
   if (error) throw error;
 
-  statement.bind(1, count++, function (error) {
-    if (error) throw error;
-    statement.step(function (row) {
-      statement.finalize(function () {
-        if (++rows == total) {
-          d = ((new Date)-t0)/1000;
-          puts("**** " + d + "s to insert " + rows + " rows (" + (rows/d) + "/s)");
-          getRows();
-        }
-      });
+  statement.bind(1, count++);
+  statement.step(function (row) {
+    statement.finalize(function () {
+      if (++rows == total) {
+        d = ((new Date)-t0)/1000;
+        puts("**** " + d + "s to insert " + rows + " rows (" + (rows/d) + "/s)");
+        getRows();
+      }
     });
   });
 }

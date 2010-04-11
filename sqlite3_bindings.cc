@@ -478,193 +478,34 @@ protected:
     // JS prepared statement bindings
     //
 
-    // indicate the key type (integer index or name string)
-    enum BindKeyType {
-      KEY_INT,
-      KEY_STRING
-    };
-
-    // indicate the parameter type
-    enum BindValueType {
-      VALUE_INT,
-      VALUE_DOUBLE,
-      VALUE_STRING,
-      VALUE_NULL
-    };
-
-    struct bind_request {
-      Persistent<Function> cb;
-      Statement *sto;
-
-      enum BindKeyType   key_type;
-      enum BindValueType value_type;
-
-      void *key;   // char * | int *
-      void *value; // char * | int * | double * | 0
-      size_t value_size;
-    };
-
-    static int EIO_AfterBind(eio_req *req) {
-      ev_unref(EV_DEFAULT_UC);
-
-      HandleScope scope;
-      struct bind_request *bind_req = (struct bind_request *)(req->data);
-
-      Local<Value> argv[1];
-      bool err = false;
-      if (req->result) {
-        err = true;
-        argv[0] = Exception::Error(String::New("Error binding parameter"));
-      }
-
-      TryCatch try_catch;
-
-      bind_req->cb->Call(Context::GetCurrent()->Global(), err ? 1 : 0, argv);
-
-      if (try_catch.HasCaught()) {
-        FatalException(try_catch);
-      }
-
-      bind_req->cb.Dispose();
-
-      free(bind_req->key);
-      free(bind_req->value);
-      free(bind_req);
-
-      return 0;
-    }
-
-    static int EIO_Bind(eio_req *req) {
-      struct bind_request *bind_req = (struct bind_request *)(req->data);
-      Statement *sto = bind_req->sto;
-
-      int index(0);
-      switch(bind_req->key_type) {
-        case KEY_INT:
-          index = *(int*)(bind_req->key);
-          break;
-
-        case KEY_STRING:
-          index = sqlite3_bind_parameter_index(sto->stmt_,
-                                               (char*)(bind_req->key));
-          break;
-
-         default: {
-           // this SHOULD be unreachable
-         }
-      }
-
-      if (!index) {
-        req->result = SQLITE_MISMATCH;
-        return 0;
-      }
-
-      int rc = 0;
-      switch(bind_req->value_type) {
-        case VALUE_INT:
-          rc = sqlite3_bind_int(sto->stmt_, index, *(int*)(bind_req->value));
-          break;
-        case VALUE_DOUBLE:
-          rc = sqlite3_bind_double(sto->stmt_, index, *(double*)(bind_req->value));
-          break;
-        case VALUE_STRING:
-          rc = sqlite3_bind_text(sto->stmt_, index, (char*)(bind_req->value),
-                            bind_req->value_size, SQLITE_TRANSIENT);
-          break;
-        case VALUE_NULL:
-          rc = sqlite3_bind_null(sto->stmt_, index);
-          break;
-
-        default: {
-          // should be unreachable
-        }
-      }
-
-      if (rc) {
-        req->result = rc;
-        return 0;
-      }
-
-      return 0;
-    }
-
     static Handle<Value> Bind(const Arguments& args) {
       HandleScope scope;
       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
 
       REQ_ARGS(2);
-      REQ_FUN_ARG(2, cb);
-
       if (!args[0]->IsString() && !args[0]->IsInt32())
-        return ThrowException(Exception::TypeError(
+        return ThrowException(Exception::TypeError(                     
                String::New("First argument must be a string or integer")));
+      int index = args[0]->IsString() ?
+        sqlite3_bind_parameter_index(sto->stmt_, *String::Utf8Value(args[0])) :
+        args[0]->Int32Value();
 
-      struct bind_request *bind_req = (struct bind_request *)
-          calloc(1, sizeof(struct bind_request));
-
-      // setup key
-      if (args[0]->IsString()) {
-         String::Utf8Value keyValue(args[0]);
-         bind_req->key_type = KEY_STRING;
-
-         char *key = (char *) calloc(1, keyValue.length() + 1);
-         bind_req->value_size = keyValue.length() + 1;
-         strcpy(key, *keyValue);
-
-         bind_req->key = key;
-      }
-      else if (args[0]->IsInt32()) {
-        bind_req->key_type = KEY_INT;
-        int *index = (int *) malloc(sizeof(int));
-        *index = args[0]->Int32Value();
-        bind_req->value_size = sizeof(int);
-
-        // don't forget to `free` this
-        bind_req->key = index;
-      }
-
-      // setup value
       if (args[1]->IsInt32()) {
-        bind_req->value_type = VALUE_INT;
-        int *value = (int *) malloc(sizeof(int));
-        *value = args[1]->Int32Value();
-        bind_req->value = value;
-      }
-      else if (args[1]->IsNumber()) {
-        bind_req->value_type = VALUE_DOUBLE;
-        double *value = (double *) malloc(sizeof(double));
-        *value = args[1]->NumberValue();
-        bind_req->value = value;
-      }
-      else if (args[1]->IsString()) {
-        bind_req->value_type = VALUE_STRING;
+        sqlite3_bind_int(sto->stmt_, index, args[1]->Int32Value());
+      } else if (args[1]->IsNumber()) {
+        sqlite3_bind_double(sto->stmt_, index, args[1]->NumberValue());
+      } else if (args[1]->IsString()) {
         String::Utf8Value text(args[1]);
-        char *value = (char *) calloc(text.length()+1, sizeof(char*));
-        strcpy(value, *text);
-        bind_req->value = value;
-        bind_req->value_size = text.length()+1;
-      }
-      else if (args[1]->IsNull() || args[1]->IsUndefined()) {
-        bind_req->value_type = VALUE_NULL;
-        bind_req->value = NULL;
-      }
-      else {
-        free(bind_req->key);
-        return ThrowException(Exception::TypeError(
+        sqlite3_bind_text(sto->stmt_, index, *text, text.length(),SQLITE_TRANSIENT);
+      } else if (args[1]->IsNull() || args[1]->IsUndefined()) {
+        sqlite3_bind_null(sto->stmt_, index);
+      } else {
+        return ThrowException(Exception::TypeError(                     
                String::New("Unable to bind value of this type")));
       }
-
-      bind_req->cb = Persistent<Function>::New(cb);
-      bind_req->sto = sto;
-
-      eio_custom(EIO_Bind, EIO_PRI_DEFAULT, EIO_AfterBind, bind_req);
-
-      ev_ref(EV_DEFAULT_UC);
-
-      return Undefined();
+      return args.This();
     }
 
-    // XXX TODO
     static Handle<Value> BindParameterCount(const Arguments& args) {
       HandleScope scope;
       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
