@@ -32,20 +32,15 @@ Database.prototype = {
 
 // Iterate over the list of bindings. Since we can't use something as
 // simple as a for or while loop, we'll just chain them via the event loop
-function _setBindingsByIndex(db,
-  statement, bindings, nextCallback, rowCallback, bindIndex) {
+function _setBindingsByIndex(statement, bindings) {
 
   if (!bindings.length) {
-    nextCallback(db, statement, rowCallback);
     return;
   }
 
-  bindIndex = bindIndex || 1;
-  var value = bindings.shift();
-
-  statement.bind(bindIndex, value, function () {
-    _setBindingsByIndex(db, statement, bindings, nextCallback, rowCallback, bindIndex+1);
-  });
+  for (var i=0; i < bindings.length; i++) {
+    statement.bind(i+1, bindings[i]);
+  }
 }
 
 // Wrapper around sqlite step method
@@ -73,14 +68,9 @@ function _doStep(db, statement, rowCallback) {
 function _onPrepare(db, statement, bindings, rowCallback) {
   if (Array.isArray(bindings)) {
     if (bindings.length) {
-      _setBindingsByIndex(db, statement, bindings, _doStep, rowCallback);
+      _setBindingsByIndex(statement, bindings);
     }
-    else {
-      _doStep(db, statement, rowCallback);
-    }
-  }
-  else if (typeof(bindings) !== 'undefined') {
-    // TODO index by keys
+    _doStep(db, statement, rowCallback);
   }
 }
 
@@ -110,6 +100,7 @@ function _onExecute(db, statement, bindings, callback) {
 //            both can be empty.  Results, even a single row, are returned
 //            as an  array
 Database.prototype.execute = function(sqlOrStatement, bindings, callback) {
+  sys.debug(sqlOrStatement);
   var self = this;
   // bindings are optional, see if they were passed
   if (typeof(bindings) == "function") {
