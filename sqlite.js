@@ -33,7 +33,7 @@ Database.prototype = {
 // Iterate over the list of bindings. Since we can't use something as
 // simple as a for or while loop, we'll just chain them via the event loop
 function _setBindingsByIndex(statement, bindings) {
-
+  
   if (!bindings.length) {
     return;
   }
@@ -76,7 +76,6 @@ function _onPrepare(db, statement, bindings, rowCallback) {
 
 function _onExecute(db, statement, bindings, callback) {
   if (statement) {
-    if (statement.reused) statement.reset();
     var results = []
     if (!bindings) bindings = [];
     
@@ -92,33 +91,37 @@ function _onExecute(db, statement, bindings, callback) {
 
 // Executes a select, insert, or update statement.
 // Params: 
-// sqlOrStatement - a sql string with optional ? for place holders or 
-//                    or a statement object retrieved from db.prepare
+// sql - a sql string with optional ? for place holders 
+//       prepared statements are cached by sql name
 //
 // bindings - optional, an array of objects to bind to ?s
 // callback - will be called as callback(err, results_array)
 //            both can be empty.  Results, even a single row, are returned
 //            as an  array
-Database.prototype.execute = function(sqlOrStatement, bindings, callback) {
-  sys.debug(sqlOrStatement);
+Database.prototype.execute = function(sql, bindings, callback) {
+  //sys.debug(sqlOrStatement);
   var self = this;
   // bindings are optional, see if they were passed
   if (typeof(bindings) == "function") {
     callback = bindings;
     bindings = [];
   }
+
+  // check the statement cache
+  if (!self.statement_cache) self.statement_cache = {}
+  statement = self.statement_cache[sql];
   
-  if (!sqlOrStatement.step) {
+  if (!statement) {
     // statements have step functions, it's a sql string
-    this.prepare(sqlOrStatement, function(error, statement) {
+    this.prepare(sql, function(error, the_statement) {
       if (error) return callback(error);
-      self.statement = statement;
-      _onExecute(self, self.statement, bindings, callback);
+      self.statement_cache[sql] = the_statement;
+      _onExecute(self, the_statement, bindings, callback);
     }); 
   } else {
     //the user is passing in their own statement
-    sqlOrStatement.reused = true;
-    _onExecute(self, sqlOrStatement, bindings, callback);
+    statement.reset()
+    _onExecute(self, statement, bindings, callback);
   } 
     
 }
