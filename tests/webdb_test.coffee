@@ -1,7 +1,9 @@
 webdb_sqlite: require "../webdb_sqlite"
-require "assert"
+assert: require "assert"
 sys: require "sys"
+fs: require "fs"
 
+fs.unlinkSync("web_potatoes")
 db: webdb_sqlite.openDatabase "web_potatoes", ->
 	sys.puts("Starting with a simple flow")
 	db.transaction(
@@ -18,5 +20,5 @@ db: webdb_sqlite.openDatabase "web_potatoes", ->
 		, (transaction, err) ->
 			throw err
 		, (transaction) ->
-			sys.puts "Table creatd."
+			sys.puts "Table created."
 	)

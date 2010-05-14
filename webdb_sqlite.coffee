@@ -22,7 +22,7 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 if process?
-	sqlite: require "sqlite"
+	sqlite: require "./sqlite"
 	sys: require "sys"
 
 class Database
@@ -65,15 +65,15 @@ class SQLTransaction
 				# until there are no more to process
 				execute_sql: ->
 					try
-						finish_up() if self.sql_queue.length is 0
+						return finish_up() if self.sql_queue.length is 0
 						sql_wrapper: self.sql_queue.shift()
 						self.sqlite_db.execute sql_wrapper.sql, sql_wrapper.bindings, (err, res) ->
 							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
 							# no error, let the caller know
 							if sql_wrapper.callback?
 								#package up the results per the spec
-								sql_result_set: {insertId: sqlite_db.lastInsertId, rowsAffected: sqlite_db.rowsAffect}		
-								sql_wrapper.callback(sql_result_set, self)
+								sql_result_set: {insertId: self.sqlite_db.lastInsertRowid(), rowsAffected: self.sqlite_db.changes()}		
+								sql_wrapper.callback(self, sql_result_set)
 								execute_sql()
 					catch error
 						sys.debug("Catch transaction: " + error)
@@ -102,13 +102,14 @@ class SQLTransaction
 	
 	handleTransactionError: (err, errorCallback) ->
 		self: this
-		sys.debug("handleTransactionError" + err)
 		if err?
+			sys.debug("handleTransactionError: " + err)
 			if errorCallback?
 				# according to the spec, the errorCallback should return true 
 				# if everything handled ok
 				if not errorCallback(self, err) then return self.transactionRollback(err)
 			else return self.transactionRollback(err)
+		else return true
 			
 	transactionRollback: (err) ->
 		sys.debug("transactionRollback: " + err)

@@ -19,7 +19,7 @@
   // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
   // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
   if ((typeof process !== "undefined" && process !== null)) {
-    sqlite = require("sqlite");
+    sqlite = require("./sqlite");
     sys = require("sys");
   }
   Database = function Database(name, callback) {
@@ -43,6 +43,7 @@
   Database.prototype.transaction = function transaction(start, failure, success) {
     return new SQLTransaction(this, start, failure, success);
   };
+
   SQLTransaction = function SQLTransaction(db, start, failure, success) {
     var self;
     this.db = db;
@@ -63,7 +64,7 @@
           var sql_wrapper;
           try {
             if (self.sql_queue.length === 0) {
-              finish_up();
+              return finish_up();
             }
             sql_wrapper = self.sql_queue.shift();
             self.sqlite_db.execute(sql_wrapper.sql, sql_wrapper.bindings, function(err, res) {
@@ -75,10 +76,10 @@
               if ((typeof (_a = sql_wrapper.callback) !== "undefined" && _a !== null)) {
                 //package up the results per the spec
                 sql_result_set = {
-                  insertId: sqlite_db.lastInsertId,
-                  rowsAffected: sqlite_db.rowsAffect
+                  insertId: self.sqlite_db.lastInsertRowid(),
+                  rowsAffected: self.sqlite_db.changes()
                 };
-                sql_wrapper.callback(sql_result_set, self);
+                sql_wrapper.callback(self, sql_result_set);
                 return execute_sql();
               }
             });
@@ -123,8 +124,8 @@
   SQLTransaction.prototype.handleTransactionError = function handleTransactionError(err, errorCallback) {
     var self;
     self = this;
-    sys.debug("handleTransactionError" + err);
     if ((typeof err !== "undefined" && err !== null)) {
+      sys.debug("handleTransactionError: " + err);
       if ((typeof errorCallback !== "undefined" && errorCallback !== null)) {
         // according to the spec, the errorCallback should return true
         // if everything handled ok
@@ -134,6 +135,8 @@
       } else {
         return self.transactionRollback(err);
       }
+    } else {
+      return true;
     }
   };
   SQLTransaction.prototype.transactionRollback = function transactionRollback(err) {
@@ -148,6 +151,7 @@
     });
     return false;
   };
+
   // opens the database
   openDatabase = function openDatabase(name, version, displayName, estimatedSize, callback) {
     (typeof version !== "undefined" && version !== null) && !(typeof displayName !== "undefined" && displayName !== null) ? (callback = version) : null;

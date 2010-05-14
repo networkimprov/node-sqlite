@@ -89,8 +89,8 @@ public:
     NODE_SET_PROTOTYPE_METHOD(constructor_template, "open", Open);
     NODE_SET_PROTOTYPE_METHOD(constructor_template, "close", Close);
     NODE_SET_PROTOTYPE_METHOD(constructor_template, "prepare", Prepare);
-//     NODE_SET_PROTOTYPE_METHOD(constructor_template, "changes", Changes);
-//     NODE_SET_PROTOTYPE_METHOD(constructor_template, "lastInsertRowid", LastInsertRowid);
+    NODE_SET_PROTOTYPE_METHOD(constructor_template, "changes", Changes);
+    NODE_SET_PROTOTYPE_METHOD(constructor_template, "lastInsertRowid", LastInsertRowid);
 
     target->Set(v8::String::NewSymbol("Database"),
             constructor_template->GetFunction());
