@@ -72,7 +72,12 @@ class SQLTransaction
 							# no error, let the caller know
 							if sql_wrapper.callback?
 								#package up the results per the spec
-								sql_result_set: {insertId: self.sqlite_db.lastInsertRowid(), rowsAffected: self.sqlite_db.changes()}		
+								# this object is an array with a couple of other params
+								sql_result_set:  {}
+								sql_result_set.insertId: self.sqlite_db.lastInsertRowid()
+								sql_result_set.rowsAffected: self.sqlite_db.changes()
+								# this is a weird object but the spec wants it so...
+								sql_result_set.rows: if res? then res else []
 								sql_wrapper.callback(self, sql_result_set)
 								execute_sql()
 					catch error
