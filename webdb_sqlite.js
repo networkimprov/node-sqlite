@@ -80,7 +80,6 @@
                 sql_result_set = {};
                 sql_result_set.insertId = self.sqlite_db.lastInsertRowid();
                 sql_result_set.rowsAffected = self.sqlite_db.changes();
-                // this is a weird object but the spec wants it so...
                 sql_result_set.rows = (typeof res !== "undefined" && res !== null) ? res : [];
                 sql_wrapper.callback(self, sql_result_set);
               }
