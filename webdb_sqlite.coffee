@@ -90,7 +90,7 @@ class SQLTransaction
 		
 	# Prepares, and queues the statement as per the guidelines in the spec
 	#
-	# Note that mrjjwright's fork of node-sqlite also caches statements
+	# Note that  mrjjwright's fork of node-sqlite also caches statements
 	# for performance instead of preparing them each time. 
 	#
 	# sql can either be an escaped sql, or sql with ? placeholders.
