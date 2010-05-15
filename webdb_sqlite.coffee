@@ -62,8 +62,8 @@ class SQLTransaction
 						# delayed shift for efficient queue
 						self.dequeued: self.dequeued + 1
 						if (self.dequeued * 2) > self.sql_queue.length
-				        	self.sql_queue: self.sql_queue.slice(self.dequeued)
-				        	self.dequeued: 0
+							self.sql_queue: self.sql_queue.slice(self.dequeued)
+							self.dequeued: 0
 				     
 						self.sqlite_db.execute sql_wrapper.sql, sql_wrapper.bindings, (err, res) ->
 							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
