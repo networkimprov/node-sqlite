@@ -73,7 +73,6 @@ db: webdb_sqlite.openDatabase "web_potatoes.db", ->
 					null, 
 					(transaction, sql_result_set) ->
 						assert.equal sql_result_set.rows[0]["count(*)"], 200002, "show return 200002 rows"
-						sys.debug sys.inspect sql_result_set
 					, (transaction, err) ->
 						throw err		
 				)

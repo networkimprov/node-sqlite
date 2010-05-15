@@ -34,14 +34,6 @@ class Database
 			callback() if callback?
 		return this
 	
-		
-	# Set options for this wrapper
-	# (not part of the HTML5 Web DB spec)
-	#
-	#
-	setOptions: (options) ->
-		@options: if @options then _.extend(@options, options) else options
-	
 	# Begin a transaction		
 	transaction: (start, failure, success) ->
 		new SQLTransaction(this, start, failure, success)
@@ -66,12 +58,12 @@ class SQLTransaction
 				execute_sql: ->
 					try
 						return finish_up() if self.sql_queue.length is 0
-						sql_wrapper: self.sql_queue[dequeued]
+						sql_wrapper: self.sql_queue[self.dequeued]
 						# delayed shift for efficient queue
-						dequeued += 1
-				      	if dequeued * 2 > self.sql_queue.length
-				        	self.sql_queue = self.sql_queue.slice(dequeued);
-				        	dequeued = 0;
+						self.dequeued: self.dequeued + 1
+						if (self.dequeued * 2) > self.sql_queue.length
+				        	self.sql_queue: self.sql_queue.slice(self.dequeued)
+				        	self.dequeued: 0
 				     
 						self.sqlite_db.execute sql_wrapper.sql, sql_wrapper.bindings, (err, res) ->
 							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
@@ -135,15 +127,5 @@ openDatabase: (name, version, displayName, estimatedSize, callback) ->
 		callback: version
 	return new Database(name, callback)
 								
-# Stolen from underscore.coffee
-# Extend a given object with all of the properties in a source object.
-extend: (obj) ->
-    for source in _.rest(arguments)
-      (obj[key]: val) for key, val of source
-    obj
-
-rest: (array, index, guard) ->
-    slice.call(array, if _.isUndefined(index) or guard then 1 else index)
-
 if process?
 	exports.openDatabase: openDatabase

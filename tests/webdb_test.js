@@ -44,7 +44,7 @@
     }, function(transaction) {
       return sys.debug("Simple flow complete.", russian_potatoes_test());
     });
-    russian_potatoes_test = function russian_potatoes_test() {
+    russian_potatoes_test = function() {
       sys.debug("Ok, let make enough potatoes to feed a Russian army (200000)");
       return db.transaction(function(transaction) {
         var _a, _b, i;
@@ -57,8 +57,7 @@
           })();
         }
         return transaction.executeSQL("select count(*) from potatoes", null, function(transaction, sql_result_set) {
-          assert.equal(sql_result_set.rows[0]["count(*)"], 200002, "show return 200002 rows");
-          return sys.debug(sys.inspect(sql_result_set));
+          return assert.equal(sql_result_set.rows[0]["count(*)"], 200002, "show return 200002 rows");
         }, function(transaction, err) {
           throw err;
         });
