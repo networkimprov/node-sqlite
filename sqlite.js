@@ -99,7 +99,7 @@ function _onExecute(db, statement, bindings, callback) {
 //            both can be empty.  Results, even a single row, are returned
 //            as an  array
 Database.prototype.execute = function(sql, bindings, callback) {
-  //sys.debug(sqlOrStatement);
+  //sys.debug(sql);
   var self = this;
   // bindings are optional, see if they were passed
   if (typeof(bindings) == "function") {

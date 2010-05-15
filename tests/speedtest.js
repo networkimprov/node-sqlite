@@ -8,7 +8,7 @@ var inspect = sys.inspect;
 var db = new sqlite.Database();
 
 
-var count = 100000;
+var count = 200000;
 var t0;
 
 function readTest(db, callback) {
@@ -21,32 +21,30 @@ function readTest(db, callback) {
   });
 }
 
-function writeTest(db, statement, i, callback) {
-    db.execute(statement, function (results) {
+function writeTest(db, sql, i, callback) {
+    db.execute(sql, function (results) {
       if (!i--) {
         // end of results
-        statement.finalize( function () {
-          db.execute("commit", function () {
-            var dt = ((new Date)-t0)/1000;
-            puts("**** " + count + " insertions in " + dt + "s (" + (count/dt) + "/s)");
-            if (callback) callback(db);
-          });          
-        });
+        db.execute("commit", function () {
+          var dt = ((new Date)-t0)/1000;
+          puts("**** " + count + " insertions in " + dt + "s (" + (count/dt) + "/s)");
+          if (callback) callback(db);
+        });          
       }
       else {
-        writeTest(db, statement, i--, callback);
+        writeTest(db, sql, i--, callback);
       }
     });    
 }
 
 db.open("test.db", function () {
   db.execute("begin transaction", function () {
-      db.execute("CREATE TABLE t1 (alpha INTEGER)", function () {
-        db.prepare("INSERT INTO t1 VALUES (1)", function (err, statement) {
-          t0 = new Date();
-          writeTest(db, statement, count, readTest);
-        });
+    db.execute("CREATE TABLE t1 (alpha INTEGER)", function () {
+      sql = "INSERT INTO t1 VALUES (1)";
+      db.execute(sql, function (err, res) {
+        t0 = new Date();
+        writeTest(db, sql, count, readTest);
+      });
     });
-  });
-  
+  }); 
 });

@@ -82,8 +82,8 @@
                 // this is a weird object but the spec wants it so...
                 sql_result_set.rows = (typeof res !== "undefined" && res !== null) ? res : [];
                 sql_wrapper.callback(self, sql_result_set);
-                return execute_sql();
               }
+              return execute_sql();
             });
           } catch (error) {
             sys.debug("Catch transaction: " + error);

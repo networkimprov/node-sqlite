@@ -79,7 +79,7 @@ class SQLTransaction
 								# this is a weird object but the spec wants it so...
 								sql_result_set.rows: if res? then res else []
 								sql_wrapper.callback(self, sql_result_set)
-								execute_sql()
+							execute_sql()
 					catch error
 						sys.debug("Catch transaction: " + error)
 						return if not self.handleTransactionError(error, sqlite_wrapper.errorCallback)	
