@@ -1,5 +1,5 @@
 (function(){
-  var Database, SQLTransaction, extend, openDatabase, rest, sqlite, sys;
+  var Database, SQLTransaction, extend, openDatabase, queue, rest, sqlite, sys;
   var __hasProp = Object.prototype.hasOwnProperty;
   // A HTML5 web database wrapper around the node-sqlite lib
   // Based on mrjjwright's fork of node-sqlite
@@ -21,6 +21,7 @@
   if ((typeof process !== "undefined" && process !== null)) {
     sqlite = require("./sqlite");
     sys = require("sys");
+    queue = require("./queue");
   }
   Database = function Database(name, callback) {
     this.sqlite_db = new sqlite.Database();
@@ -48,7 +49,7 @@
     var self;
     this.db = db;
     self = this;
-    this.sql_queue = [];
+    this.sql_queue = new queue.Queue();
     this.sqlite_db = db.sqlite_db;
     this.failure = failure;
     try {
@@ -63,10 +64,10 @@
         execute_sql = function execute_sql() {
           var sql_wrapper;
           try {
-            if (self.sql_queue.length === 0) {
+            if (self.sql_queue.getSize() === 0) {
               return finish_up();
             }
-            sql_wrapper = self.sql_queue.shift();
+            sql_wrapper = self.sql_queue.dequeue();
             self.sqlite_db.execute(sql_wrapper.sql, sql_wrapper.bindings, function(err, res) {
               var _a, sql_result_set;
               if (!self.handleTransactionError(err, sql_wrapper.errorCallback)) {
@@ -116,7 +117,7 @@
   // optional callback(transaction, resultSet)
   // optional errorCallback(transaction,error)
   SQLTransaction.prototype.executeSQL = function executeSQL(sql, bindings, callback, errorCallback) {
-    return this.sql_queue.push({
+    return this.sql_queue.enqueue({
       sql: sql,
       bindings: bindings,
       callback: callback,

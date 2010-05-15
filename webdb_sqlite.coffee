@@ -54,7 +54,7 @@ class SQLTransaction
 		@sql_queue: []
 		@sqlite_db: db.sqlite_db
 		@failure: failure
-		
+		@dequeued: 0 # Pointer used by the delayed shift mechanism
 		try
 			# execute the steps as detailed here:
 			# http://dev.w3.org/html5/webdatabase/#transaction-steps
@@ -66,7 +66,13 @@ class SQLTransaction
 				execute_sql: ->
 					try
 						return finish_up() if self.sql_queue.length is 0
-						sql_wrapper: self.sql_queue.shift()
+						sql_wrapper: self.sql_queue[dequeued]
+						# delayed shift for efficient queue
+						dequeued += 1
+				      	if dequeued * 2 > self.sql_queue.length
+				        	self.sql_queue = self.sql_queue.slice(dequeued);
+				        	dequeued = 0;
+				     
 						self.sqlite_db.execute sql_wrapper.sql, sql_wrapper.bindings, (err, res) ->
 							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
 							# no error, let the caller know
