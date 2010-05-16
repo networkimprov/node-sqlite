@@ -97,7 +97,7 @@ class SQLTransaction
 	# optional bindings is an array of params in the right order
 	# optional callback(transaction, resultSet) 
 	# optional errorCallback(transaction,error) 
-	executeSQL: (sql, bindings, callback, errorCallback) ->
+	executeSql: (sql, bindings, callback, errorCallback) ->
 			@sql_queue.push(
 				{sql: sql, bindings: bindings, callback: callback, errorCallback: errorCallback}
 			)

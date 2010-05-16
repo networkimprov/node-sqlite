@@ -115,7 +115,7 @@
   // optional bindings is an array of params in the right order
   // optional callback(transaction, resultSet)
   // optional errorCallback(transaction,error)
-  SQLTransaction.prototype.executeSQL = function(sql, bindings, callback, errorCallback) {
+  SQLTransaction.prototype.executeSql = function(sql, bindings, callback, errorCallback) {
     return this.sql_queue.push({
       sql: sql,
       bindings: bindings,
