@@ -28,16 +28,25 @@ if process?
 class Database
 	
 	# opens the database	
-	constructor: (name, callback) ->
+	constructor: (path, callback) ->
 		@sqlite_db: new sqlite.Database()
-		@sqlite_db.open name, (err) ->
+		# save the db path so we can reopen the db
+		@path: path
+		@sqlite_db.open path, (err) ->
 			callback() if callback?
 		return this
 	
 	# Begin a transaction		
 	transaction: (start, failure, success) ->
-		new SQLTransaction(this, start, failure, success)
-		
+		self: this
+		if not @sqlite_db?
+			@sqlite_db: new sqlite.Database()
+			@sqlite_db.open @path, (err) ->
+				throw err if err?
+				new SQLTransaction(self, start, failure, success)
+		else
+			new SQLTransaction(self, start, failure, success)
+			
 class SQLTransaction
 
 	constructor: (db, start, failure, success) ->
@@ -60,11 +69,10 @@ class SQLTransaction
 						return finish_up() if self.sql_queue.length is 0
 						sql_wrapper: self.sql_queue[self.dequeued]
 						# delayed shift for efficient queue
-						self.dequeued: self.dequeued + 1
-						if (self.dequeued * 2) > self.sql_queue.length
+						self.dequeued += 1
+						if (self.dequeued * 2) >= self.sql_queue.length
 							self.sql_queue: self.sql_queue.slice(self.dequeued)
 							self.dequeued: 0
-				     
 						self.sqlite_db.execute sql_wrapper.sql, sql_wrapper.bindings, (err, res) ->
 							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
 							# no error, let the caller know
@@ -83,11 +91,14 @@ class SQLTransaction
 				execute_sql()
 				finish_up: ->
 					self.sqlite_db.execute "commit;", ->
-						success(self) if success?
+						self.sqlite_db.close ->
+							self.db.sqlite_db: undefined
+							success(self) if success?
 		catch err
 			sys.debug(err)
 			self.transactionRollback(err)
-		
+	
+
 	# Prepares, and queues the statement as per the guidelines in the spec
 	#
 	# Note that  mrjjwright's fork of node-sqlite also caches statements
@@ -117,7 +128,9 @@ class SQLTransaction
 		sys.debug("transactionRollback: " + err)
 		self: this
 		@sqlite_db.execute "rollback;", ->
-			self.failure(self, err) if self.failure?
+			self.sqlite_db.close ->
+				self.db.sqlite_db: undefined
+				self.failure(self, err) if self.failure?
 		return false
 			
 # opens the database	

@@ -21,9 +21,11 @@
     sqlite = require("./sqlite");
     sys = require("sys");
   }
-  Database = function(name, callback) {
+  Database = function(path, callback) {
     this.sqlite_db = new sqlite.Database();
-    this.sqlite_db.open(name, function(err) {
+    // save the db path so we can reopen the db
+    this.path = path;
+    this.sqlite_db.open(path, function(err) {
       if ((typeof callback !== "undefined" && callback !== null)) {
         return callback();
       }
@@ -34,7 +36,19 @@
   // opens the database
   // Begin a transaction
   Database.prototype.transaction = function(start, failure, success) {
-    return new SQLTransaction(this, start, failure, success);
+    var _a, self;
+    self = this;
+    if (!(typeof (_a = this.sqlite_db) !== "undefined" && _a !== null)) {
+      this.sqlite_db = new sqlite.Database();
+      return this.sqlite_db.open(this.path, function(err) {
+        if ((typeof err !== "undefined" && err !== null)) {
+          throw err;
+        }
+        return new SQLTransaction(self, start, failure, success);
+      });
+    } else {
+      return new SQLTransaction(self, start, failure, success);
+    }
   };
 
   SQLTransaction = function(db, start, failure, success) {
@@ -63,8 +77,8 @@
             }
             sql_wrapper = self.sql_queue[self.dequeued];
             // delayed shift for efficient queue
-            self.dequeued = self.dequeued + 1;
-            if ((self.dequeued * 2) > self.sql_queue.length) {
+            self.dequeued += 1;
+            if ((self.dequeued * 2) >= self.sql_queue.length) {
               self.sql_queue = self.sql_queue.slice(self.dequeued);
               self.dequeued = 0;
             }
@@ -95,9 +109,12 @@
         execute_sql();
         finish_up = function() {
           return self.sqlite_db.execute("commit;", function() {
-            if ((typeof success !== "undefined" && success !== null)) {
-              return success(self);
-            }
+            return self.sqlite_db.close(function() {
+              self.db.sqlite_db = undefined;
+              if ((typeof success !== "undefined" && success !== null)) {
+                return success(self);
+              }
+            });
           });
         };
         return finish_up;
@@ -146,10 +163,13 @@
     sys.debug("transactionRollback: " + err);
     self = this;
     this.sqlite_db.execute("rollback;", function() {
-      var _a;
-      if ((typeof (_a = self.failure) !== "undefined" && _a !== null)) {
-        return self.failure(self, err);
-      }
+      return self.sqlite_db.close(function() {
+        var _a;
+        self.db.sqlite_db = undefined;
+        if ((typeof (_a = self.failure) !== "undefined" && _a !== null)) {
+          return self.failure(self, err);
+        }
+      });
     });
     return false;
   };

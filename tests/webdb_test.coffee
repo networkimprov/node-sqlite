@@ -6,7 +6,8 @@ fs: require "fs"
 try
 	fs.unlinkSync("web_potatoes.db")
 catch err
-	# skip
+	sys.debug(err)
+	
 db: webdb_sqlite.openDatabase "web_potatoes.db", ->
 	sys.debug("Starting with a simple flow")
 	db.transaction(
@@ -45,11 +46,12 @@ db: webdb_sqlite.openDatabase "web_potatoes.db", ->
 				null, 
 				(transaction, sql_result_set) ->
 					assert.equal sql_result_set.rows.length, 2, "show return 2 rows"
-					sys.debug "Select 2 rows"
-					russian_potatoes_test()
 				(transaction, err) ->
 					throw err		
 			)
+		null,
+		(transaction) ->
+			russian_potatoes_test()
 	)
 	
 	russian_potatoes_test: ->
@@ -58,8 +60,8 @@ db: webdb_sqlite.openDatabase "web_potatoes.db", ->
 			(transaction) ->
 				for i in [1..200000]
 					transaction.executeSql(
-						"insert into potatoes(type, takes_ketchup, is_ready) values(?, ?, ?)", 
-						["red", 0, 0], 
+						"insert into potatoes values(3, 3, 3)", 
+						null,
 						null,
 						(transaction, err) ->
 							throw err		
@@ -69,8 +71,6 @@ db: webdb_sqlite.openDatabase "web_potatoes.db", ->
 					null, 
 					(transaction, sql_result_set) ->
 						assert.equal sql_result_set.rows[0]["count(*)"], 200002, "show return 200002 rows"
-					(transaction, err) ->
-						throw err		
 				)
 			(transaction, err) ->
 				throw err

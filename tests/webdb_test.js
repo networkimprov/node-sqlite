@@ -7,7 +7,7 @@
   try {
     fs.unlinkSync("web_potatoes.db");
   } catch (err) {
-    // skip
+    sys.debug(err);
   }
   db = webdb_sqlite.openDatabase("web_potatoes.db", function() {
     var russian_potatoes_test;
@@ -34,12 +34,12 @@
         throw err;
       });
       return transaction.executeSql("select * from potatoes", null, function(transaction, sql_result_set) {
-        assert.equal(sql_result_set.rows.length, 2, "show return 2 rows");
-        sys.debug("Select 2 rows");
-        return russian_potatoes_test();
+        return assert.equal(sql_result_set.rows.length, 2, "show return 2 rows");
       }, function(transaction, err) {
         throw err;
       });
+    }, null, function(transaction) {
+      return russian_potatoes_test();
     });
     russian_potatoes_test = function() {
       sys.debug("Ok, let make enough potatoes to feed a Russian army (200000)");
@@ -48,15 +48,13 @@
         _a = 1; _b = 200000;
         for (i = _a; (_a <= _b ? i <= _b : i >= _b); (_a <= _b ? i += 1 : i -= 1)) {
           (function() {
-            return transaction.executeSql("insert into potatoes(type, takes_ketchup, is_ready) values(?, ?, ?)", ["red", 0, 0], null, function(transaction, err) {
+            return transaction.executeSql("insert into potatoes values(3, 3, 3)", null, null, function(transaction, err) {
               throw err;
             });
           })();
         }
         return transaction.executeSql("select count(*) from potatoes", null, function(transaction, sql_result_set) {
           return assert.equal(sql_result_set.rows[0]["count(*)"], 200002, "show return 200002 rows");
-        }, function(transaction, err) {
-          throw err;
         });
       }, function(transaction, err) {
         throw err;
