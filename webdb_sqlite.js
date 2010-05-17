@@ -1,5 +1,10 @@
 (function(){
   var Database, SQLTransaction, openDatabase, sqlite, sys;
+  var __slice = Array.prototype.slice, __bind = function(func, obj, args) {
+    return function() {
+      return func.apply(obj || {}, args ? args.concat(__slice.call(arguments, 0)) : arguments);
+    };
+  };
   // A HTML5 web database wrapper around the node-sqlite lib
   // Based on mrjjwright's fork of node-sqlite
   // Copyright (c) 2009, Eric Fredricksen <e@fredricksen.net>
@@ -22,10 +27,10 @@
     sys = require("sys");
   }
   Database = function(path, callback) {
-    this.sqlite_db = new sqlite.Database();
-    // save the db path so we can reopen the db
+    var self;
     this.path = path;
-    this.sqlite_db.open(path, function(err) {
+    self = this;
+    process.nextTick(function() {
       if ((typeof callback !== "undefined" && callback !== null)) {
         return callback();
       }
@@ -34,21 +39,20 @@
     return this;
   };
   // opens the database
+  Database.prototype.open_sqlite = function(callback) {
+    this.sqlite_db = new sqlite.Database();
+    // save the db path so we can reopen the db
+    return this.sqlite_db.open(this.path, function(err) {
+      if ((typeof callback !== "undefined" && callback !== null)) {
+        return callback();
+      }
+    });
+  };
   // Begin a transaction
   Database.prototype.transaction = function(start, failure, success) {
-    var _a, self;
-    self = this;
-    if (!(typeof (_a = this.sqlite_db) !== "undefined" && _a !== null)) {
-      this.sqlite_db = new sqlite.Database();
-      return this.sqlite_db.open(this.path, function(err) {
-        if ((typeof err !== "undefined" && err !== null)) {
-          throw err;
-        }
-        return new SQLTransaction(self, start, failure, success);
-      });
-    } else {
-      return new SQLTransaction(self, start, failure, success);
-    }
+    return this.open_sqlite(__bind(function() {
+        return new SQLTransaction(this, start, failure, success);
+      }, this));
   };
 
   SQLTransaction = function(db, start, failure, success) {

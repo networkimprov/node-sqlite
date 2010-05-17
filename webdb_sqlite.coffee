@@ -29,23 +29,22 @@ class Database
 	
 	# opens the database	
 	constructor: (path, callback) ->
-		@sqlite_db: new sqlite.Database()
-		# save the db path so we can reopen the db
 		@path: path
-		@sqlite_db.open path, (err) ->
+		self: this
+		process.nextTick ->
 			callback() if callback?
 		return this
 	
+	open_sqlite: (callback) ->
+		@sqlite_db: new sqlite.Database()
+		# save the db path so we can reopen the db
+		@sqlite_db.open @path, (err) ->
+			callback() if callback?
+	
 	# Begin a transaction		
 	transaction: (start, failure, success) ->
-		self: this
-		if not @sqlite_db?
-			@sqlite_db: new sqlite.Database()
-			@sqlite_db.open @path, (err) ->
-				throw err if err?
-				new SQLTransaction(self, start, failure, success)
-		else
-			new SQLTransaction(self, start, failure, success)
+		@open_sqlite =>
+			new SQLTransaction(this, start, failure, success)
 			
 class SQLTransaction
 

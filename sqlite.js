@@ -78,7 +78,6 @@ function _onExecute(db, statement, bindings, callback) {
   if (statement) {
     var results = []
     if (!bindings) bindings = [];
-    x = new Date().getTime();
     // this will be called after the update or once for every row returned
     _onPrepare(db, statement, bindings, function(error, row){
 		//	sys.debug(new Date().getTime() - x);
