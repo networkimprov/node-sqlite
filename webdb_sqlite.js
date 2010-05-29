@@ -41,7 +41,6 @@
   // opens the database
   Database.prototype.open_sqlite = function(callback) {
     this.sqlite_db = new sqlite.Database();
-    // save the db path so we can reopen the db
     return this.sqlite_db.open(this.path, function(err) {
       if ((typeof callback !== "undefined" && callback !== null)) {
         return callback();
@@ -87,24 +86,26 @@
               self.dequeued = 0;
             }
             self.sqlite_db.execute(sql_wrapper.sql, sql_wrapper.bindings, function(err, res) {
-              var _a, sql_result_set;
+              var _a, srs;
               if (!self.handleTransactionError(err, sql_wrapper.errorCallback)) {
                 return null;
               }
               // no error, let the caller know
               if ((typeof (_a = sql_wrapper.callback) !== "undefined" && _a !== null)) {
-                //package up the results per the spec
+                //package up the results into a sql_result_set per the spec
                 // this object is an array with a couple of other params
-                sql_result_set = {};
-                sql_result_set.insertId = self.sqlite_db.lastInsertRowid();
-                sql_result_set.rowsAffected = self.sqlite_db.changes();
-                sql_result_set.rows = (typeof res !== "undefined" && res !== null) ? res : [];
-                sql_wrapper.callback(self, sql_result_set);
+                srs = {};
+                srs.insertId = self.sqlite_db.lastInsertRowid();
+                srs.rowsAffected = self.sqlite_db.changes();
+                srs.rows = (typeof res !== "undefined" && res !== null) ? res : [];
+                srs.rows.item = function(index) {
+                  return srs.rows[index];
+                };
+                sql_wrapper.callback(self, srs);
               }
               return execute_sql();
             });
           } catch (error) {
-            sys.debug("Catch transaction: " + error);
             if (!self.handleTransactionError(error, sqlite_wrapper.errorCallback)) {
               return null;
             }
@@ -113,6 +114,7 @@
         execute_sql();
         finish_up = function() {
           return self.sqlite_db.execute("commit;", function() {
+            // we close the database after each transaction
             return self.sqlite_db.close(function() {
               self.db.sqlite_db = undefined;
               if ((typeof success !== "undefined" && success !== null)) {
@@ -148,7 +150,6 @@
     var self;
     self = this;
     if ((typeof err !== "undefined" && err !== null)) {
-      sys.debug("handleTransactionError: " + err);
       if ((typeof errorCallback !== "undefined" && errorCallback !== null)) {
         // according to the spec, the errorCallback should return true
         // if everything handled ok
@@ -164,9 +165,9 @@
   };
   SQLTransaction.prototype.transactionRollback = function(err) {
     var self;
-    sys.debug("transactionRollback: " + err);
     self = this;
     this.sqlite_db.execute("rollback;", function() {
+      // we close the database after each transaction
       return self.sqlite_db.close(function() {
         var _a;
         self.db.sqlite_db = undefined;

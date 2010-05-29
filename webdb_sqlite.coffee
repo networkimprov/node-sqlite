@@ -37,7 +37,6 @@ class Database
 	
 	open_sqlite: (callback) ->
 		@sqlite_db: new sqlite.Database()
-		# save the db path so we can reopen the db
 		@sqlite_db.open @path, (err) ->
 			callback() if callback?
 	
@@ -76,20 +75,22 @@ class SQLTransaction
 							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
 							# no error, let the caller know
 							if sql_wrapper.callback?
-								#package up the results per the spec
+								#package up the results into a sql_result_set per the spec
 								# this object is an array with a couple of other params
-								sql_result_set:  {}
-								sql_result_set.insertId: self.sqlite_db.lastInsertRowid()
-								sql_result_set.rowsAffected: self.sqlite_db.changes()
-								sql_result_set.rows: if res? then res else []
-								sql_wrapper.callback(self, sql_result_set)
+								srs:  {} 
+								srs.insertId: self.sqlite_db.lastInsertRowid()
+								srs.rowsAffected: self.sqlite_db.changes()
+								srs.rows: if res? then res else []
+								srs.rows.item: (index) ->
+										return srs.rows[index]
+								sql_wrapper.callback(self, srs)
 							execute_sql()
 					catch error
-						sys.debug("Catch transaction: " + error)
 						return if not self.handleTransactionError(error, sqlite_wrapper.errorCallback)	
 				execute_sql()
 				finish_up: ->
 					self.sqlite_db.execute "commit;", ->
+						# we close the database after each transaction
 						self.sqlite_db.close ->
 							self.db.sqlite_db: undefined
 							success(self) if success?
@@ -115,7 +116,6 @@ class SQLTransaction
 	handleTransactionError: (err, errorCallback) ->
 		self: this
 		if err?
-			sys.debug("handleTransactionError: " + err)
 			if errorCallback?
 				# according to the spec, the errorCallback should return true 
 				# if everything handled ok
@@ -124,9 +124,9 @@ class SQLTransaction
 		else return true
 			
 	transactionRollback: (err) ->
-		sys.debug("transactionRollback: " + err)
 		self: this
 		@sqlite_db.execute "rollback;", ->
+			# we close the database after each transaction
 			self.sqlite_db.close ->
 				self.db.sqlite_db: undefined
 				self.failure(self, err) if self.failure?
