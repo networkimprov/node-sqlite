@@ -151,10 +151,12 @@
     self = this;
     if ((typeof err !== "undefined" && err !== null)) {
       if ((typeof errorCallback !== "undefined" && errorCallback !== null)) {
-        // according to the spec, the errorCallback should return true
-        // if everything handled ok
-        if (!errorCallback(self, err)) {
+        // according to the spec, the errorCallback should return false
+        // if the error should be ignored
+        if (errorCallback(self, err)) {
           return self.transactionRollback(err);
+        } else {
+          return true;
         }
       } else {
         return self.transactionRollback(err);

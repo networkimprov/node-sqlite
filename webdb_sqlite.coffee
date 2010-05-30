@@ -117,9 +117,10 @@ class SQLTransaction
 		self: this
 		if err?
 			if errorCallback?
-				# according to the spec, the errorCallback should return true 
-				# if everything handled ok
-				if not errorCallback(self, err) then return self.transactionRollback(err)
+				# according to the spec, the errorCallback should return false 
+				# if the error should be ignored
+				if errorCallback(self, err) then return self.transactionRollback(err)
+				else return true
 			else return self.transactionRollback(err)
 		else return true
 			
