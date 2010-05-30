@@ -130,7 +130,7 @@ class SQLTransaction
 			# we close the database after each transaction
 			self.sqlite_db.close ->
 				self.db.sqlite_db: undefined
-				self.failure(self, err) if self.failure?
+				self.failure(err) if self.failure?
 		return false
 			
 # opens the database	

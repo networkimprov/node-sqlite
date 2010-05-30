@@ -174,7 +174,7 @@
         var _a;
         self.db.sqlite_db = undefined;
         if ((typeof (_a = self.failure) !== "undefined" && _a !== null)) {
-          return self.failure(self, err);
+          return self.failure(err);
         }
       });
     });
