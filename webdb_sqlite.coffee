@@ -92,7 +92,6 @@ class SQLTransaction
 					self.sqlite_db.execute "commit;", ->
 						# we close the database after each transaction
 						self.sqlite_db.close ->
-							self.db.sqlite_db: undefined
 							success(self) if success?
 		catch err
 			sys.debug(err)
@@ -129,7 +128,6 @@ class SQLTransaction
 		@sqlite_db.execute "rollback;", ->
 			# we close the database after each transaction
 			self.sqlite_db.close ->
-				self.db.sqlite_db: undefined
 				self.failure(err) if self.failure?
 		return false
 			

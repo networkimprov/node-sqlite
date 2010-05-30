@@ -116,7 +116,6 @@
           return self.sqlite_db.execute("commit;", function() {
             // we close the database after each transaction
             return self.sqlite_db.close(function() {
-              self.db.sqlite_db = undefined;
               if ((typeof success !== "undefined" && success !== null)) {
                 return success(self);
               }
@@ -172,7 +171,6 @@
       // we close the database after each transaction
       return self.sqlite_db.close(function() {
         var _a;
-        self.db.sqlite_db = undefined;
         if ((typeof (_a = self.failure) !== "undefined" && _a !== null)) {
           return self.failure(err);
         }
