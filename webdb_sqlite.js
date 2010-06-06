@@ -40,26 +40,32 @@
   };
   // opens the database
   Database.prototype.open_sqlite = function(callback) {
-    this.sqlite_db = new sqlite.Database();
-    return this.sqlite_db.open(this.path, function(err) {
+    var sqlite_db;
+    sqlite_db = new sqlite.Database();
+    return sqlite_db.open(this.path, function(err) {
+      if ((typeof err !== "undefined" && err !== null)) {
+        return callback(err);
+      }
       if ((typeof callback !== "undefined" && callback !== null)) {
-        return callback();
+        return callback(null, sqlite_db);
       }
     });
   };
   // Begin a transaction
   Database.prototype.transaction = function(start, failure, success) {
-    return this.open_sqlite(__bind(function() {
-        return new SQLTransaction(this, start, failure, success);
+    return this.open_sqlite(__bind(function(err, sqlite_db) {
+        if ((typeof err !== "undefined" && err !== null)) {
+          return failure(err);
+        }
+        return new SQLTransaction(sqlite_db, start, failure, success);
       }, this));
   };
 
-  SQLTransaction = function(db, start, failure, success) {
+  SQLTransaction = function(sqlite_db, start, failure, success) {
     var self;
-    this.db = db;
     self = this;
     this.sql_queue = [];
-    this.sqlite_db = db.sqlite_db;
+    this.sqlite_db = sqlite_db;
     this.failure = failure;
     this.dequeued = 0;
     // Pointer used by the delayed shift mechanism
@@ -70,6 +76,16 @@
         var execute_sql, finish_up;
         // caller hook to start queuing up sql
         start(self);
+        // a cleanup method used at the bottom
+        finish_up = function() {
+          return self.sqlite_db.execute("commit;", function(err) {
+            // we close the database after each transaction
+            self.sqlite_db.finalizeAndClose();
+            if ((typeof success !== "undefined" && success !== null)) {
+              return success(self);
+            }
+          });
+        };
         // Try to execute the statements in the queue
         // until there are no more to process
         execute_sql = function() {
@@ -111,18 +127,7 @@
             }
           }
         };
-        execute_sql();
-        finish_up = function() {
-          return self.sqlite_db.execute("commit;", function() {
-            // we close the database after each transaction
-            return self.sqlite_db.close(function() {
-              if ((typeof success !== "undefined" && success !== null)) {
-                return success(self);
-              }
-            });
-          });
-        };
-        return finish_up;
+        return execute_sql();
       });
     } catch (err) {
       sys.debug(err);
@@ -168,13 +173,12 @@
     var self;
     self = this;
     this.sqlite_db.execute("rollback;", function() {
+      var _a;
       // we close the database after each transaction
-      return self.sqlite_db.close(function() {
-        var _a;
-        if ((typeof (_a = self.failure) !== "undefined" && _a !== null)) {
-          return self.failure(err);
-        }
-      });
+      self.sqlite_db.close();
+      if ((typeof (_a = self.failure) !== "undefined" && _a !== null)) {
+        return self.failure(err);
+      }
     });
     return false;
   };

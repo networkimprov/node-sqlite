@@ -125,3 +125,20 @@ Database.prototype.execute = function(sql, bindings, callback) {
   } 
     
 }
+
+Database.prototype.finalizeAndClose = function () {
+  counter = 0;
+  self = this;
+  if (typeof this.statement_cache !== "undefined" && this.statement_cache !== null) {
+    keys = Object.keys(this.statement_cache);
+    keys.forEach(function(key) {
+      statement = self.statement_cache[key];
+      if (typeof statement !== "undefined" && statement !== null) {
+        self.statement_cache[key].finalize();
+        if (counter++ ===  keys.length - 1) self.close();
+      }
+    });
+  } else {
+    this.close();
+  }
+}

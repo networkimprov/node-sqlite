@@ -82,13 +82,10 @@ function test_simple() {
         statement.step(function () {
           puts('query callback');
           puts(inspect(arguments));
-          statement.finalize(function () {
-            puts("finalize callback");
-            db.close(function () {
-              puts("closed database");
-              puts("close args " + inspect(arguments));
-            });
-          });
+          statement.finalize();
+          db.close()
+          puts("closed database");
+          puts("close args " + inspect(arguments));
         });
       });
     });

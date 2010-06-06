@@ -49,7 +49,8 @@ db: webdb_sqlite.openDatabase "web_potatoes.db", ->
 				(transaction, err) ->
 					throw err		
 			)
-		null,
+		(transaction, err) ->
+			throw err
 		(transaction) ->
 			russian_potatoes_test()
 	)

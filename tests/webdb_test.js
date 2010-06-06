@@ -38,8 +38,11 @@
       }, function(transaction, err) {
         throw err;
       });
-    }, null, function(transaction) {
-      return russian_potatoes_test();
+    }, function(transaction, err) {
+      throw err;
+    }, function(transaction) {
+      return sys.debug("hi");
+      //russian_potatoes_test()
     });
     russian_potatoes_test = function() {
       sys.debug("Ok, let make enough potatoes to feed a Russian army (200000)");

@@ -222,73 +222,12 @@ protected:
     return scope.Close(result);
   }
 
-  struct close_request {
-    Persistent<Function> cb;
-    Sqlite3Db *dbo;
-  };
-
-  static int EIO_AfterClose(eio_req *req) {
-    ev_unref(EV_DEFAULT_UC);
-
-    HandleScope scope;
-
-    struct close_request *close_req = (struct close_request *)(req->data);
-
-    Local<Value> argv[1];
-    bool err = false;
-    if (req->result) {
-      err = true;
-      argv[0] = Exception::Error(String::New("Error closing database"));
-    }
-
-    TryCatch try_catch;
-
-    close_req->dbo->Unref();
-    close_req->cb->Call(Context::GetCurrent()->Global(), err ? 1 : 0, argv);
-
-    if (try_catch.HasCaught()) {
-      FatalException(try_catch);
-    }
-
-    close_req->cb.Dispose();
-
-    free(close_req);
-
-    return 0;
-  }
-
-  static int EIO_Close(eio_req *req) {
-    struct close_request *close_req = (struct close_request *)(req->data);
-    Sqlite3Db* dbo = close_req->dbo;
-    req->result = sqlite3_close(dbo->db_);
-    dbo->db_ = NULL;
-    return 0;
-  }
-
   static Handle<Value> Close(const Arguments& args) {
     HandleScope scope;
 
-    REQ_FUN_ARG(0, cb);
-
     Sqlite3Db* dbo = ObjectWrap::Unwrap<Sqlite3Db>(args.This());
-
-    struct close_request *close_req = (struct close_request *)
-        calloc(1, sizeof(struct close_request));
-
-    if (!close_req) {
-      V8::LowMemoryNotification();
-      return ThrowException(Exception::Error(
-        String::New("Could not allocate enough memory")));
-    }
-
-    close_req->cb = Persistent<Function>::New(cb);
-    close_req->dbo = dbo;
-
-    eio_custom(EIO_Close, EIO_PRI_DEFAULT, EIO_AfterClose, close_req);
-
-    ev_ref(EV_DEFAULT_UC);
-    dbo->Ref();
-
+    sqlite3_close(dbo->db_);
+    dbo->db_ = NULL;
     return Undefined();
   }
 
@@ -520,53 +459,12 @@ protected:
       return Undefined();
     }
 
-    static int EIO_AfterFinalize(eio_req *req) {
-      ev_unref(EV_DEFAULT_UC);
-      Statement *sto = (class Statement *)(req->data);
-
-      HandleScope scope;
-
-      Local<Function> cb = sto->GetCallback();
-
-      TryCatch try_catch;
-
-      cb->Call(sto->handle_, 0, NULL);
-
-      if (try_catch.HasCaught()) {
-        FatalException(try_catch);
-      }
-
-      sto->Unref();
-
-      return 0;
-    }
-
-    static int EIO_Finalize(eio_req *req) {
-      Statement *sto = (class Statement *)(req->data);
-
-      assert(sto->stmt_);
-      req->result = sqlite3_finalize(sto->stmt_);
-      sto->stmt_ = NULL;
-
-      return 0;
-    }
-
     static Handle<Value> Finalize(const Arguments& args) {
       HandleScope scope;
-
       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
-
-      if (sto->HasCallback()) {
-        return ThrowException(Exception::Error(String::New("Already stepping")));
-      }
-
-      REQ_FUN_ARG(0, cb);
-
-      sto->SetCallback(cb);
-
-      eio_custom(EIO_Finalize, EIO_PRI_DEFAULT, EIO_AfterFinalize, sto);
-
-      ev_ref(EV_DEFAULT_UC);
+      assert(sto->stmt_);
+      sqlite3_finalize(sto->stmt_);
+      sto->stmt_ = NULL;
 
       return Undefined();
     }

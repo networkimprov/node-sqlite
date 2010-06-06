@@ -36,22 +36,23 @@ class Database
 		return this
 	
 	open_sqlite: (callback) ->
-		@sqlite_db: new sqlite.Database()
-		@sqlite_db.open @path, (err) ->
-			callback() if callback?
+		sqlite_db: new sqlite.Database()
+		sqlite_db.open @path, (err) ->
+			return callback(err) if err?
+			callback(null, sqlite_db) if callback?
 	
 	# Begin a transaction		
 	transaction: (start, failure, success) ->
-		@open_sqlite =>
-			new SQLTransaction(this, start, failure, success)
+		@open_sqlite (err, sqlite_db) =>
+			return failure(err) if err?
+			new SQLTransaction(sqlite_db, start, failure, success)
 			
 class SQLTransaction
 
-	constructor: (db, start, failure, success) ->
-		@db: db
+	constructor: (sqlite_db, start, failure, success) ->
 		self: this
 		@sql_queue: []
-		@sqlite_db: db.sqlite_db
+		@sqlite_db: sqlite_db
 		@failure: failure
 		@dequeued: 0 # Pointer used by the delayed shift mechanism
 		try
@@ -60,6 +61,14 @@ class SQLTransaction
 			self.sqlite_db.execute "begin transaction;", ->
 				# caller hook to start queuing up sql
 				start(self)
+				
+				# a cleanup method used at the bottom
+				finish_up: ->
+					self.sqlite_db.execute "commit;", (err) ->
+						# we close the database after each transaction
+						self.sqlite_db.finalizeAndClose()
+						success(self) if success?
+							
 				# Try to execute the statements in the queue
 				# until there are no more to process
 				execute_sql: ->
@@ -88,11 +97,6 @@ class SQLTransaction
 					catch error
 						return if not self.handleTransactionError(error, sqlite_wrapper.errorCallback)	
 				execute_sql()
-				finish_up: ->
-					self.sqlite_db.execute "commit;", ->
-						# we close the database after each transaction
-						self.sqlite_db.close ->
-							success(self) if success?
 		catch err
 			sys.debug(err)
 			self.transactionRollback(err)
@@ -127,8 +131,8 @@ class SQLTransaction
 		self: this
 		@sqlite_db.execute "rollback;", ->
 			# we close the database after each transaction
-			self.sqlite_db.close ->
-				self.failure(err) if self.failure?
+			self.sqlite_db.close()
+			self.failure(err) if self.failure?
 		return false
 			
 # opens the database	
