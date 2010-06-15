@@ -81,7 +81,13 @@ class SQLTransaction
 							self.sql_queue: self.sql_queue.slice(self.dequeued)
 							self.dequeued: 0
 						self.sqlite_db.execute sql_wrapper.sql, sql_wrapper.bindings, (err, res) ->
-							return if not self.handleTransactionError(err, sql_wrapper.errorCallback)
+							if err?
+								if self.handleTransactionError(err, sql_wrapper.errorCallback)
+									# according the spec, move onto the next statement if the callback returns true
+									return execute_sql()
+								else
+									return false
+				
 							# no error, let the caller know
 							if sql_wrapper.callback?
 								#package up the results into a sql_result_set per the spec
@@ -93,9 +99,10 @@ class SQLTransaction
 								srs.rows.item: (index) ->
 										return srs.rows[index]
 								sql_wrapper.callback(self, srs)
-							execute_sql()
+								
+							return execute_sql()
 					catch error
-						return if not self.handleTransactionError(error, sqlite_wrapper.errorCallback)	
+						return if not self.handleTransactionError(error, sql_wrapper.errorCallback)	
 				execute_sql()
 		catch err
 			sys.debug(err)

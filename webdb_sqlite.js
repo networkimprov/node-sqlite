@@ -103,8 +103,13 @@
             }
             self.sqlite_db.execute(sql_wrapper.sql, sql_wrapper.bindings, function(err, res) {
               var _a, srs;
-              if (!self.handleTransactionError(err, sql_wrapper.errorCallback)) {
-                return null;
+              if ((typeof err !== "undefined" && err !== null)) {
+                if (self.handleTransactionError(err, sql_wrapper.errorCallback)) {
+                  // according the spec, move onto the next statement if the callback returns true
+                  return execute_sql();
+                } else {
+                  return false;
+                }
               }
               // no error, let the caller know
               if ((typeof (_a = sql_wrapper.callback) !== "undefined" && _a !== null)) {
@@ -122,7 +127,7 @@
               return execute_sql();
             });
           } catch (error) {
-            if (!self.handleTransactionError(error, sqlite_wrapper.errorCallback)) {
+            if (!self.handleTransactionError(error, sql_wrapper.errorCallback)) {
               return null;
             }
           }
