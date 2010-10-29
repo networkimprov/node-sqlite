@@ -379,6 +379,7 @@ protected:
 //       NODE_SET_PROTOTYPE_METHOD(t, "bindParameterCount", BindParameterCount);
       NODE_SET_PROTOTYPE_METHOD(t, "reset", Reset);
       NODE_SET_PROTOTYPE_METHOD(t, "step", Step);
+      NODE_SET_PROTOTYPE_METHOD(t, "sql", Sql);
 
       callback_sym = Persistent<String>::New(String::New("callback"));
 
@@ -410,7 +411,7 @@ protected:
       if (stmt_) sqlite3_finalize(stmt_);
       if (column_types_) free(column_types_);
       if (column_names_) free(column_names_);
-      if (column_data_) FreeColumnData();
+      if (column_data_) free(column_data_);
     }
 
     //
@@ -462,10 +463,10 @@ protected:
     static Handle<Value> Finalize(const Arguments& args) {
       HandleScope scope;
       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
-      assert(sto->stmt_);
-      sqlite3_finalize(sto->stmt_);
-      sto->stmt_ = NULL;
-
+      if (sto->stmt_) {
+        sqlite3_finalize(sto->stmt_);
+        sto->stmt_ = NULL;
+      }
       return Undefined();
     }
 
@@ -475,6 +476,19 @@ protected:
        sqlite3_reset(sto->stmt_);
        return Undefined();
      }
+
+    static Handle<Value> Sql(const Arguments& args) {
+       HandleScope scope;
+       Statement* sto = ObjectWrap::Unwrap<Statement>(args.This());
+       Local<String> result = String::New(sto->stmt_ ? sqlite3_sql(sto->stmt_) : "[none]");
+       return scope.Close(result);
+     }
+
+    union column_datum {
+      char* string;
+      int integer;
+      double floatt;
+    };
 
     static int EIO_AfterStep(eio_req *req) {
       ev_unref(EV_DEFAULT_UC);
@@ -500,33 +514,28 @@ protected:
         Local<Object> row = Object::New();
 
         for (int i = 0; i < sto->column_count_; i++) {
-          assert(sto->column_data_);
-          assert(((void**)sto->column_data_)[i]);
-          assert(sto->column_names_[i]);
-          assert(sto->column_types_[i]);
-
           switch (sto->column_types_[i]) {
             // XXX why does using String::New make v8 croak here?
             case SQLITE_INTEGER:
               row->Set(String::NewSymbol((char*) sto->column_names_[i]),
-                       Int32::New(*(int*) (sto->column_data_[i])));
+                       Int32::New(sto->column_data_[i].integer));
               break;
 
             case SQLITE_FLOAT:
               row->Set(String::New(sto->column_names_[i]),
-                       Number::New(*(double*) (sto->column_data_[i])));
+                       Number::New(sto->column_data_[i].floatt));
               break;
 
             case SQLITE_TEXT:
-              if (!strlen((char*)sto->column_data_[i]))
-                row->Set(String::New(sto->column_names_[i]), Undefined());
-              else row->Set(String::New(sto->column_names_[i]),
-                       String::New((char *) (sto->column_data_[i])));
+              //if (!strlen((char*)sto->column_data_[i]))
+              //  row->Set(String::New(sto->column_names_[i]), Undefined());
+              row->Set(String::New(sto->column_names_[i]),
+                       String::New(sto->column_data_[i].string));
               // don't free this pointer, it's owned by sqlite3
               break;
 
             case SQLITE_NULL:
-              row->Set(String::New(sto->column_names_[i]), Undefined());
+              row->Set(String::New(sto->column_names_[i]), Null());
             // no default
           }
         }
@@ -544,14 +553,14 @@ protected:
         FatalException(try_catch);
       }
 
-      if (req->result == SQLITE_DONE && sto->column_count_) {
-        sto->FreeColumnData();
-      }
+      //if (req->result == SQLITE_DONE && sto->column_count_) {
+      //  sto->FreeColumnData();
+      //}
 
       return 0;
     }
 
-    void FreeColumnData(void) {
+/*    void FreeColumnData(void) {
       if (!column_count_) return;
       for (int i = 0; i < column_count_; i++) {
         switch (column_types_[i]) {
@@ -567,12 +576,12 @@ protected:
 
       free(column_data_);
       column_data_ = NULL;
-    }
+    }*/
 
     static int EIO_Step(eio_req *req) {
       Statement *sto = (class Statement *)(req->data);
       sqlite3_stmt *stmt = sto->stmt_;
-      assert(stmt);
+      //assert(stmt);
       int rc;
 
       // check if we have already taken a step immediately after prepare
@@ -584,8 +593,11 @@ protected:
         // think this is the first.
         sto->first_rc_ = -1;
       }
-      else {
+      else if (stmt) {
         rc = req->result = sqlite3_step(stmt);
+      }
+      else {
+        rc = req->result = SQLITE_DONE;
       }
 
       sto->error_ = false;
@@ -599,50 +611,28 @@ protected:
           sto->column_count_ = sqlite3_column_count(stmt);
           assert(sto->column_count_);
           sto->column_types_ = (int *) calloc(sto->column_count_, sizeof(int));
-          sto->column_names_ = (char **) calloc(sto->column_count_,
-                                                sizeof(char *));
-
-          if (sto->column_count_) {
-            sto->column_data_ = (void **) calloc(sto->column_count_,
-                                                 sizeof(void *));
-          }
+          sto->column_names_ = (char **) calloc(sto->column_count_, sizeof(char *));
+          sto->column_data_ = (column_datum *) calloc(sto->column_count_, sizeof(column_datum));
 
           for (int i = 0; i < sto->column_count_; i++) {
-            sto->column_types_[i] = sqlite3_column_type(stmt, i);
             sto->column_names_[i] = (char *) sqlite3_column_name(stmt, i);
-
-            switch(sto->column_types_[i]) {
-              case SQLITE_INTEGER:
-                sto->column_data_[i] = (int *) malloc(sizeof(int));
-                break;
-
-              case SQLITE_FLOAT:
-                sto->column_data_[i] = (double *) malloc(sizeof(double));
-                break;
-
-              // no need to allocate memory for strings
-
-              default: {
-                // unsupported type
-              }
-            }
+            assert(sto->column_names_[i]);
           }
         }
 
         assert(sto->column_types_ && sto->column_data_ && sto->column_names_);
 
         for (int i = 0; i < sto->column_count_; i++) {
-          int type = sto->column_types_[i];
+          sto->column_types_[i] = sqlite3_column_type(stmt, i);
+          assert(sto->column_types_[i]);
 
-          switch(type) {
+          switch(sto->column_types_[i]) {
             case SQLITE_INTEGER: 
-              *(int*)(sto->column_data_[i]) = sqlite3_column_int(stmt, i);
-              assert(sto->column_data_[i]);
+              sto->column_data_[i].integer = sqlite3_column_int(stmt, i);
               break;
 
             case SQLITE_FLOAT:
-              *(double*)(sto->column_data_[i]) = sqlite3_column_double(stmt, i);
-              assert(sto->column_data_[i]);
+              sto->column_data_[i].floatt = sqlite3_column_double(stmt, i);
               break;
 
             case SQLITE_TEXT: {
@@ -651,31 +641,20 @@ protected:
                 // it will be reclaimed on the next step, reset, or finalize.
                 // I'm going to assume it's okay to keep this pointer around
                 // until it is used in `EIO_AfterStep`
-                sto->column_data_[i] = (char *) sqlite3_column_text(stmt, i);
-                if (!sto->column_data_[i])
-                  sto->column_data_[i] = (char *)"";
-                assert(sto->column_data_[i]);
+                sto->column_data_[i].string = (char *) sqlite3_column_text(stmt, i);
+                if (!sto->column_data_[i].string)
+                  sto->column_data_[i].string = (char *)"";
                 break;
               }
               
             case SQLITE_NULL:
-              sto->column_data_[i] = (char *)"";
-              assert(sto->column_data_[i]);
               break;
               
-            default: {
-              sto->column_data_[i] = (char *)"";
-              assert(sto->column_data_[i]);
+            default:
+              assert(true);
               break;
-            }
           }
-          assert(sto->column_data_[i]);
-          assert(sto->column_names_[i]);
-          assert(sto->column_types_[i]);
         }
-        assert(sto->column_data_);
-        assert(sto->column_names_);
-        assert(sto->column_types_);
       }
       else if (rc == SQLITE_DONE) {
         // nothing to do in this case
@@ -728,7 +707,7 @@ protected:
     int  column_count_;
     int  *column_types_;
     char **column_names_;
-    void **column_data_;
+    column_datum *column_data_;
     bool error_;
 
     int first_rc_;
