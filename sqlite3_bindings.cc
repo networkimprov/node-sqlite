@@ -23,6 +23,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <v8.h>
 #include <node.h>
 #include <node_events.h>
+#include <node_buffer.h>
 
 #include <sqlite3.h>
 
@@ -437,6 +438,9 @@ protected:
       } else if (args[1]->IsString()) {
         String::Utf8Value text(args[1]);
         sqlite3_bind_text(sto->stmt_, index, *text, text.length(),SQLITE_TRANSIENT);
+      } else if (Buffer::HasInstance(args[1])) {
+        Buffer* buffer = Buffer::Unwrap<Buffer>(args[1]->ToObject());
+        sqlite3_bind_blob(sto->stmt_, index, buffer->data(), buffer->length(), SQLITE_TRANSIENT);
       } else if (args[1]->IsNull() || args[1]->IsUndefined()) {
         sqlite3_bind_null(sto->stmt_, index);
       } else {
@@ -486,6 +490,7 @@ protected:
 
     union column_datum {
       char* string;
+      struct { int size; char* data; } blob;
       int integer;
       double floatt;
     };
@@ -533,6 +538,12 @@ protected:
                        String::New(sto->column_data_[i].string));
               // don't free this pointer, it's owned by sqlite3
               break;
+
+            case SQLITE_BLOB: {
+              Buffer* buffer = Buffer::New(sto->column_data_[i].blob.size);
+              memcpy(buffer->data(), sto->column_data_[i].blob.data, sto->column_data_[i].blob.size);
+              row->Set(String::New(sto->column_names_[i]), buffer->handle_);
+              } break;
 
             case SQLITE_NULL:
               row->Set(String::New(sto->column_names_[i]), Null());
@@ -646,6 +657,11 @@ protected:
                   sto->column_data_[i].string = (char *)"";
                 break;
               }
+
+            case SQLITE_BLOB:
+              sto->column_data_[i].blob.data = (char*) sqlite3_column_blob(stmt, i);
+              sto->column_data_[i].blob.size = sqlite3_column_bytes(stmt, i);
+              break;
               
             case SQLITE_NULL:
               break;
