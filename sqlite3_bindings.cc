@@ -390,7 +390,7 @@ protected:
 
       callback_sym = Persistent<String>::New(String::New("callback"));
 
-      //target->Set(v8::String::NewSymbol("SQLStatement"), t->GetFunction());
+      target->Set(v8::String::NewSymbol("Statement"), constructor_template->GetFunction());
     }
 
     static Handle<Value> New(const Arguments& args) {
@@ -511,8 +511,11 @@ protected:
       Local<Value> argv[2];
 
       if (sto->error_) {
+        int errcode = sqlite3_errcode(sqlite3_db_handle(sto->stmt_));
         argv[0] = Exception::Error(
-            String::New(sqlite3_errmsg(sqlite3_db_handle(sto->stmt_))));
+            String::New(errcode == sto->error_ ? sqlite3_errmsg(sqlite3_db_handle(sto->stmt_)) : "lookup result"));
+        Local<Object> obj = argv[0]->ToObject();
+        obj->Set(String::NewSymbol("result"), Integer::New(sto->error_));
       }
       else {
         argv[0] = Local<Value>::New(Undefined());
@@ -617,7 +620,7 @@ protected:
         rc = req->result = SQLITE_DONE;
       }
 
-      sto->error_ = false;
+      sto->error_ = 0;
 
       if (rc == SQLITE_ROW) {
         // If these pointers are NULL, look up and store the number of columns
@@ -678,11 +681,11 @@ protected:
           }
         }
       }
-      else if (rc == SQLITE_DONE) {
+      else if (rc == SQLITE_DONE || rc == SQLITE_OK) {
         // nothing to do in this case
       }
       else {
-        sto->error_ = true;
+        sto->error_ = rc;
       }
 
       return 0;
@@ -730,7 +733,7 @@ protected:
     int  *column_types_;
     char **column_names_;
     column_datum *column_data_;
-    bool error_;
+    int error_;
 
     int first_rc_;
     sqlite3_stmt* stmt_;
